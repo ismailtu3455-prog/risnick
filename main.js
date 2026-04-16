@@ -1,6 +1,6 @@
-﻿// bothost compatibility wrapper for fixed build pipeline
+// bothost compatibility wrapper for fixed build pipeline
 // 1) Generate Prisma client at runtime (schema is copied after npm install in bothost template)
-// 2) Start compiled app from dist/src
+// 2) Start compiled app from dist (supports dist/src/main.js and dist/main.js)
 const { execSync } = require("node:child_process");
 const { existsSync } = require("node:fs");
 
@@ -14,8 +14,10 @@ try {
   throw error;
 }
 
-if (!existsSync("./dist/src/main.js")) {
-  throw new Error("dist/src/main.js not found. Run `npm run build` locally and push dist folder.");
+if (existsSync("./dist/src/main.js")) {
+  require("./dist/src/main.js");
+} else if (existsSync("./dist/main.js")) {
+  require("./dist/main.js");
+} else {
+  throw new Error("dist entrypoint not found. Run `npm run build` locally and push dist folder.");
 }
-
-require("./dist/src/main.js");
