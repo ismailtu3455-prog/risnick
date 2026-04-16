@@ -1,0 +1,397 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CampaignStatus {
+  PENDING_PAYMENT
+  WAITING_APPROVAL
+  ACTIVE
+  PAUSED
+  ENDED
+  REJECTED
+}
+
+enum SponsorStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+}
+
+enum PaymentMethod {
+  CRYPTOBOT
+  YOOMONEY_MANUAL
+  YOOKASSA
+}
+
+enum PaymentStatus {
+  PENDING_PROOF
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  FAILED
+}
+
+enum ProofStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum RequesterType {
+  ADMIN
+  SPONSOR
+}
+
+enum FraudSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum UserSponsorStatus {
+  SHOWN
+  SUBSCRIBED
+  FAILED
+}
+
+model User {
+  id             String              @id @default(uuid())
+  telegramId     BigInt              @unique
+  username       String?
+  firstName      String?
+  lastName       String?
+  languageCode   String?             @default("ru")
+  isBlocked      Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  adminProfile   Admin?
+  sponsorProfile Sponsor?
+
+  offerHistory       UserOfferHistory[]
+  sponsorHistory     UserSponsorHistory[]
+  campaignImpressions CampaignImpression[]
+  subscriptionChecks SubscriptionCheck[]
+  clicks             ClickLog[]
+  auditActions       AuditLog[]          @relation("AuditActor")
+  fraudFlags         FraudFlag[]
+
+  @@index([createdAt])
+}
+
+model Admin {
+  id               String        @id @default(uuid())
+  userId           String        @unique
+  isSuperAdmin     Boolean       @default(false)
+  rewardPerLeadRub Decimal       @db.Decimal(12, 2)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offers           Offer[]
+  balance          AdminBalance?
+  withdrawRequests WithdrawRequest[]
+
+  @@index([isSuperAdmin])
+}
+
+model Sponsor {
+  id               String         @id @default(uuid())
+  userId           String         @unique
+  status           SponsorStatus  @default(PENDING)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns        Campaign[]
+  payments         Payment[]
+  withdrawRequests WithdrawRequest[]
+
+  @@index([status])
+}
+
+model Offer {
+  id             String            @id @default(uuid())
+  token          String            @unique
+  adminId        String
+  title          String
+  description    String?
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  admin          Admin             @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  files          OfferFile[]
+  impressions    CampaignImpression[]
+  offerHistory   UserOfferHistory[]
+  sponsorHistory UserSponsorHistory[]
+  checks         SubscriptionCheck[]
+  clicks         ClickLog[]
+  fraudFlags     FraudFlag[]
+
+  @@index([adminId, createdAt])
+  @@index([isActive])
+}
+
+model OfferFile {
+  id             String   @id @default(uuid())
+  offerId        String
+  fileType       String
+  telegramFileId String?
+  fileUrl        String?
+  caption        String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  offer          Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@index([offerId, isActive])
+}
+
+model Campaign {
+  id                String               @id @default(uuid())
+  sponsorId         String
+  trafficPackageId  String
+  title             String?
+  telegramChannelId String
+  status            CampaignStatus       @default(PENDING_PAYMENT)
+  totalQuota        Int
+  remainingQuota    Int
+  priceGross        Decimal              @db.Decimal(12, 2)
+  paymentMethod     PaymentMethod
+  approvedAt        DateTime?
+  activatedAt       DateTime?
+  endedAt           DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  sponsor           Sponsor              @relation(fields: [sponsorId], references: [id], onDelete: Restrict)
+  trafficPackage    TrafficPackage       @relation(fields: [trafficPackageId], references: [id], onDelete: Restrict)
+  impressions       CampaignImpression[]
+  sponsorHistory    UserSponsorHistory[]
+  payment           Payment?
+
+  @@index([sponsorId, createdAt])
+  @@index([status, remainingQuota])
+}
+
+model CampaignImpression {
+  id         String   @id @default(uuid())
+  campaignId String
+  offerId    String
+  userId     String
+  isRepeat   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  offer      Offer    @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([campaignId, createdAt])
+  @@index([offerId, userId])
+}
+
+model UserOfferHistory {
+  id                  String   @id @default(uuid())
+  userId              String
+  offerId             String
+  firstSuccessAt      DateTime?
+  lastAccessAt        DateTime @default(now())
+  successCount        Int      @default(0)
+  isUniquePaidLead    Boolean  @default(false)
+  adminRewardIssued   Boolean  @default(false)
+  platformShareIssued Boolean  @default(false)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  offer               Offer    @relation(fields: [offerId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, offerId])
+  @@index([offerId, isUniquePaidLead])
+}
+
+model UserSponsorHistory {
+  id          String            @id @default(uuid())
+  userId      String
+  offerId     String
+  campaignId  String
+  status      UserSponsorStatus @default(SHOWN)
+  shownCount  Int               @default(1)
+  shownAt     DateTime          @default(now())
+  lastShownAt DateTime          @default(now())
+  subscribedAt DateTime?
+  user        User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  offer       Offer             @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  campaign    Campaign          @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, offerId, campaignId])
+  @@index([offerId, userId])
+}
+
+model SubscriptionCheck {
+  id           String   @id @default(uuid())
+  userId       String
+  offerId      String
+  success      Boolean
+  status       String
+  missingCount Int      @default(0)
+  details      Json?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  offer        Offer    @relation(fields: [offerId], references: [id], onDelete: Restrict)
+
+  @@index([offerId, createdAt])
+  @@index([userId, offerId])
+}
+
+model Payment {
+  id                 String        @id @default(uuid())
+  sponsorId          String
+  campaignId         String        @unique
+  paymentMethod      PaymentMethod
+  status             PaymentStatus @default(PENDING_PROOF)
+  grossAmount        Decimal       @db.Decimal(12, 2)
+  paymentFeeAmount   Decimal       @db.Decimal(12, 2)
+  netAmount          Decimal       @db.Decimal(12, 2)
+  platformCommission Decimal       @db.Decimal(12, 2)
+  adminRewardTotal   Decimal       @db.Decimal(12, 2)
+  externalPaymentId  String?
+  metadata           Json?
+  approvedAt         DateTime?
+  rejectedAt         DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  sponsor            Sponsor       @relation(fields: [sponsorId], references: [id], onDelete: Restrict)
+  campaign           Campaign      @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  proofs             PaymentProof[]
+
+  @@index([sponsorId, createdAt])
+  @@index([status, paymentMethod])
+}
+
+model PaymentProof {
+  id               String      @id @default(uuid())
+  paymentId        String
+  proofUrl         String?
+  proofNote        String?
+  status           ProofStatus @default(PENDING)
+  moderatedByUserId String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  payment          Payment     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId, status])
+}
+
+model AdminBalance {
+  id             String   @id @default(uuid())
+  adminId        String   @unique
+  availableAmount Decimal @db.Decimal(12, 2)
+  pendingAmount  Decimal  @db.Decimal(12, 2)
+  lifetimeEarned Decimal  @db.Decimal(12, 2)
+  updatedAt      DateTime @updatedAt
+  admin          Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+}
+
+model PlatformBalance {
+  id                String   @id @default(uuid())
+  availableAmount   Decimal  @db.Decimal(12, 2)
+  pendingAmount     Decimal  @db.Decimal(12, 2)
+  lifetimeGross     Decimal  @db.Decimal(12, 2)
+  lifetimeCommission Decimal @db.Decimal(12, 2)
+  updatedAt         DateTime @updatedAt
+}
+
+model WithdrawRequest {
+  id              String           @id @default(uuid())
+  requesterType   RequesterType
+  adminId         String?
+  sponsorId       String?
+  amount          Decimal          @db.Decimal(12, 2)
+  status          WithdrawalStatus @default(PENDING)
+  details         Json?
+  processedByUserId String?
+  processedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  admin           Admin?           @relation(fields: [adminId], references: [id], onDelete: Restrict)
+  sponsor         Sponsor?         @relation(fields: [sponsorId], references: [id], onDelete: Restrict)
+
+  @@index([requesterType, status])
+  @@index([adminId])
+  @@index([sponsorId])
+}
+
+model ClickLog {
+  id             String   @id @default(uuid())
+  token          String
+  offerId        String?
+  userId         String?
+  ipHash         String
+  userAgentHash  String
+  rawUserAgent   String?
+  isBlocked      Boolean  @default(false)
+  blockReason    String?
+  createdAt      DateTime @default(now())
+  offer          Offer?   @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fraudFlags     FraudFlag[]
+
+  @@index([token, createdAt])
+  @@index([ipHash, createdAt])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String?
+  actorRole    String
+  action       String
+  entityType   String
+  entityId     String?
+  payload      Json?
+  createdAt    DateTime @default(now())
+  actorUser    User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+}
+
+model FraudFlag {
+  id         String        @id @default(uuid())
+  userId     String?
+  offerId    String?
+  clickLogId String?
+  reason     String
+  severity   FraudSeverity @default(MEDIUM)
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+  user       User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  offer      Offer?        @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  clickLog   ClickLog?     @relation(fields: [clickLogId], references: [id], onDelete: SetNull)
+
+  @@index([severity, createdAt])
+}
+
+model TrafficPackage {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  userCount   Int       @unique
+  priceRub    Decimal   @db.Decimal(12, 2)
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  campaigns   Campaign[]
+}
+
+model PaymentMethodConfig {
+  id          String        @id @default(uuid())
+  method      PaymentMethod @unique
+  isActive    Boolean       @default(true)
+  feePercent  Decimal       @db.Decimal(7, 4)
+  fixedFeeRub Decimal       @db.Decimal(12, 2)
+  meta        Json?
+  updatedAt   DateTime      @updatedAt
+}
