@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-RUN npm run prisma:generate && npm run build
+RUN node -e "const fs=require('fs');const p='package.json';const b=fs.readFileSync(p);if(b[0]===0xEF&&b[1]===0xBB&&b[2]===0xBF){fs.writeFileSync(p,b.slice(3));console.log('Removed BOM from package.json');}" && npm run prisma:generate && npm run build
 
 FROM node:20-alpine AS release
 WORKDIR /app
