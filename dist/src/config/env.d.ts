@@ -1,0 +1,26 @@
+export declare const env: {
+    NODE_ENV: "development" | "test" | "production";
+    PORT: number;
+    DOMAIN_BASE: string;
+    DATABASE_URL: string;
+    REDIS_URL: string;
+    TELEGRAM_BOT_TOKEN: string;
+    TELEGRAM_BOT_USERNAME: string;
+    TELEGRAM_WEBHOOK_SECRET: string;
+    TELEGRAM_SUPER_ADMIN_ID: bigint;
+    SUPER_ADMIN_API_KEY: string;
+    ADMIN_API_KEY: string;
+    SPONSOR_API_KEY: string;
+    MODERATOR_API_KEY: string;
+    ADMIN_REWARD_RUB: number;
+    PLATFORM_COMMISSION_PERCENT: number;
+    MAX_SPONSORS_PER_OFFER: number;
+    CLICK_RATE_LIMIT_PER_MINUTE: number;
+    MIN_CLICK_INTERVAL_MS: number;
+    YOOMONEY_QUICKPAY_TEMPLATE: string;
+    YOOKASSA_ENABLED: boolean;
+    LOG_LEVEL: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+    CRYPTO_PAY_API_TOKEN?: string | undefined;
+    YOOKASSA_SHOP_ID?: string | undefined;
+    YOOKASSA_SECRET_KEY?: string | undefined;
+};

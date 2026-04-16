@@ -15,4 +15,4 @@ COPY --from=base /app/prisma ./prisma
 COPY --from=base /app/node_modules/.prisma ./node_modules/.prisma
 COPY .env.example ./.env.example
 EXPOSE 3000
-CMD ["sh", "-c", "node dist/main.js"]
+CMD ["sh", "-c", "node dist/src/main.js"]
